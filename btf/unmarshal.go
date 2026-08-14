@@ -66,33 +66,10 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 	}
 
 	var header btfType
-	var numTypes, numDeclTags, numNamedTypes int
 
-	for _, err := range allBtfTypeOffsets(raw, bo, &header) {
-		if err != nil {
-			return nil, err
-		}
-
-		numTypes++
-
-		if header.Kind() == kindDeclTag {
-			numDeclTags++
-		}
-
-		if header.NameOff != 0 {
-			numNamedTypes++
-		}
-	}
-
-	if firstTypeID == 0 {
-		// Allocate an extra slot for Void so we don't have to deal with
-		// constant off by one issues.
-		numTypes++
-	}
-
-	offsets := make([]int, 0, numTypes)
-	declTags := make(map[TypeID][]TypeID, numDeclTags)
-	namedTypes := newFuzzyStringIndex(numNamedTypes)
+	offsets := make([]int, 0, len(raw)/btfTypeSize)
+	declTags := make(map[TypeID][]TypeID)
+	namedTypes := newFuzzyStringIndex(0)
 
 	if firstTypeID == 0 {
 		// Add a sentinel for Void.
@@ -100,7 +77,11 @@ func newDecoder(raw []byte, bo binary.ByteOrder, strings *stringTable, base *dec
 	}
 
 	id := firstTypeID + TypeID(len(offsets))
-	for offset := range allBtfTypeOffsets(raw, bo, &header) {
+	for offset, err := range allBtfTypeOffsets(raw, bo, &header) {
+		if err != nil {
+			return nil, err
+		}
+
 		if id < firstTypeID {
 			return nil, fmt.Errorf("no more type IDs")
 		}
